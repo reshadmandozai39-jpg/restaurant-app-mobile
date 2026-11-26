@@ -31,8 +31,18 @@ Die MAUI-App ist für lokale Tests auf Windows mit diesem Checkout verbunden. Im
 
 Die Preise kommen ausschließlich aus `Services\RestaurantCatalog.cs`, nicht aus der Anfrage. Der Katalog enthält momentan Beispielgerichte und Beispielpreise; für ein echtes Restaurant müssen diese ersetzt und auf dem Server gepflegt werden.
 
+## Docker
+
+Das Image wird vom Repository-Hauptverzeichnis aus gebaut, da das Backend den gemeinsamen Katalog benötigt:
+
+```powershell
+docker build -t restaurant-backend .
+```
+
+Für das Hosting die Dockerfile im Repository-Hauptverzeichnis und dieses Verzeichnis als Build-Kontext auswählen. Das Image lauscht standardmäßig auf Port `10000`; falls der Anbieter einen anderen Port vorgibt, `ASPNETCORE_URLS` entsprechend setzen. Im Hosting als Umgebungsvariablen `Stripe__SecretKey` mit dem geheimen Stripe-Testschlüssel und `PublicBaseUrl` mit der öffentlichen HTTPS-Adresse des Backends setzen. Geheimnisse nicht in die Dockerfile oder ins Repository schreiben. Keine lokale Development-Umgebung im Container aktivieren, da das Backend in diesem Modus nur auf `127.0.0.1:5187` lauscht.
+
 ## Vor echtem Betrieb erforderlich
 
-Dieses Backend ist ausschließlich für lokale Entwicklung und Stripe-Testzahlungen vorgesehen. Für Android/iOS muss es bei einem Hosting-Anbieter mit HTTPS veröffentlicht werden. Setze dort `Stripe__SecretKey` auf den geheimen Testschlüssel und `PublicBaseUrl` auf die öffentliche Backend-Adresse, zum Beispiel `https://restaurant-api.example.com`. Der Hosting-Anbieter muss die App auf dem von ihm vorgegebenen Port starten lassen (üblicherweise über `ASPNETCORE_URLS`). In der App öffne **Konto → Backend für Android**, trage dieselbe HTTPS-Adresse ein und speichere sie. Checkout fordert Karte und TWINT an; Stripe zeigt TWINT nur, wenn es für das Konto und den Testmodus aktiviert und verfügbar ist.
+Dieses Backend ist ausschließlich für lokale Entwicklung und Stripe-Testzahlungen vorgesehen. Für Android/iOS wird eine erreichbare HTTPS-Adresse benötigt. Das Backend ist jedoch noch nicht für die öffentliche Bereitstellung abgesichert; vor einer Veröffentlichung müssen Authentifizierung und Schutz vor Missbrauch ergänzt werden. In der App öffne **Konto → Backend für Android**, trage die HTTPS-Adresse ein und speichere sie. Checkout fordert Karte und TWINT an; Stripe zeigt TWINT nur, wenn es für das Konto und den Testmodus aktiviert und verfügbar ist.
 
-Für Produktivbetrieb fehlen Authentifizierung, verifizierter Stripe-Webhook, serverseitige Bestellpersistenz und Schutz vor Missbrauch. Die Zahlung wird durch direkten Statusabruf bei Stripe geprüft, aber es gibt keine Bestellübermittlung an das Restaurant. Niemals Live-Schlüssel oder Test-Checkout-Links veröffentlichen.
+Für Produktivbetrieb fehlen außerdem ein verifizierter Stripe-Webhook und serverseitige Bestellpersistenz. Die Zahlung wird durch direkten Statusabruf bei Stripe geprüft, aber es gibt keine Bestellübermittlung an das Restaurant. Niemals Live-Schlüssel oder Test-Checkout-Links veröffentlichen.
