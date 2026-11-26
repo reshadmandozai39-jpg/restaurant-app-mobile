@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<Shell
+    x:Class="NET_MAUI_App.AppShell"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:pages="clr-namespace:NET_MAUI_App.Pages"
+    xmlns:f="clr-namespace:Fonts"
+    Shell.FlyoutBehavior="Disabled"
+    Shell.BackgroundColor="#2563EB"
+    Shell.ForegroundColor="White"
+    Shell.TitleColor="White"
+    Shell.TabBarBackgroundColor="White"
+    Shell.TabBarForegroundColor="#2563EB"
+    Shell.TabBarUnselectedColor="#64748B"
+    Title="Roger Restaurant">
+
+    <TabBar>
+        <ShellContent Title="Menü" Route="menu" ContentTemplate="{DataTemplate pages:MenuPage}">
+            <ShellContent.Icon><FontImageSource FontFamily="{x:Static f:FluentUI.FontFamily}" Glyph="{x:Static f:FluentUI.food_24_regular}" /></ShellContent.Icon>
+        </ShellContent>
+        <ShellContent Title="Warenkorb" Route="cart" ContentTemplate="{DataTemplate pages:CartPage}">
+            <ShellContent.Icon><FontImageSource FontFamily="{x:Static f:FluentUI.FontFamily}" Glyph="{x:Static f:FluentUI.cart_24_regular}" /></ShellContent.Icon>
+        </ShellContent>
+        <ShellContent Title="Konto" Route="profile" ContentTemplate="{DataTemplate pages:ProfilePage}">
+            <ShellContent.Icon><FontImageSource FontFamily="{x:Static f:FluentUI.FontFamily}" Glyph="{x:Static f:FluentUI.person_24_regular}" /></ShellContent.Icon>
+        </ShellContent>
+        <ShellContent Title="FAQ" Route="faq" ContentTemplate="{DataTemplate pages:FaqPage}">
+            <ShellContent.Icon><FontImageSource FontFamily="{x:Static f:FluentUI.FontFamily}" Glyph="{x:Static f:FluentUI.info_24_regular}" /></ShellContent.Icon>
+        </ShellContent>
+    </TabBar>
+</Shell>

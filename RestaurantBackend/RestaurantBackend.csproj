@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+	<TargetFramework>net10.0</TargetFramework>
+	<ImplicitUsings>enable</ImplicitUsings>
+	<Nullable>enable</Nullable>
+	<UserSecretsId>roger-restaurant-stripe-test-backend</UserSecretsId>
+  </PropertyGroup>
+  <ItemGroup>
+	<Compile Include="..\Services\RestaurantCatalog.cs" Link="RestaurantCatalog.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Stripe.net" Version="53.2.0" />
+  </ItemGroup>
+</Project>
