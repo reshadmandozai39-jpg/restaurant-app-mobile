@@ -20,19 +20,28 @@ namespace NET_MAUI_App.Pages
         {
             LoginButton.IsEnabled = false;
             CreateAccountButton.IsEnabled = false;
+            LoginError.IsVisible = false;
+
             try
             {
                 var email = EmailEntry.Text?.Trim() ?? string.Empty;
                 var password = PasswordEntry.Text ?? string.Empty;
-                if (string.IsNullOrWhiteSpace(email) || string.IsNullOrEmpty(password))
+                EmailError.IsVisible = string.IsNullOrWhiteSpace(email);
+                PasswordError.IsVisible = string.IsNullOrEmpty(password);
+                if (EmailError.IsVisible || PasswordError.IsVisible)
+                    return;
+
+                if (!await accountService.AccountExistsAsync())
                 {
-                    await DisplayAlertAsync("Anmelden", "Bitte gib E-Mail und Passwort ein.", "OK");
+                    LoginError.Text = "Bitte erstelle zuerst ein Konto auf diesem Gerät.";
+                    LoginError.IsVisible = true;
                     return;
                 }
 
                 if (!await accountService.VerifyAsync(email, password))
                 {
-                    await DisplayAlertAsync("Anmelden", "E-Mail oder Passwort ist falsch.", "OK");
+                    LoginError.Text = "E-Mail oder Passwort ist falsch.";
+                    LoginError.IsVisible = true;
                     return;
                 }
 
