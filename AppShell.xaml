@@ -9,13 +9,13 @@
     Shell.BackgroundColor="#2563EB"
     Shell.ForegroundColor="White"
     Shell.TitleColor="White"
-    Shell.TabBarBackgroundColor="White"
-    Shell.TabBarForegroundColor="#2563EB"
-    Shell.TabBarUnselectedColor="#64748B"
+    Shell.TabBarBackgroundColor="{AppThemeBinding Light=White, Dark=#1E293B}"
+    Shell.TabBarForegroundColor="{AppThemeBinding Light=#2563EB, Dark=#93C5FD}"
+    Shell.TabBarUnselectedColor="{AppThemeBinding Light=#64748B, Dark=#CBD5E1}"
     Title="Roger Restaurant">
 
     <TabBar>
-        <ShellContent Title="Menü" Route="menu" ContentTemplate="{DataTemplate pages:MenuPage}">
+        <ShellContent Title="Menü" Route="menu" ContentTemplate="{DataTemplate pages:HomePage}">
             <ShellContent.Icon><FontImageSource FontFamily="{x:Static f:FluentUI.FontFamily}" Glyph="{x:Static f:FluentUI.food_24_regular}" /></ShellContent.Icon>
         </ShellContent>
         <ShellContent Title="Warenkorb" Route="cart" ContentTemplate="{DataTemplate pages:CartPage}">

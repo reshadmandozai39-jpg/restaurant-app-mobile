@@ -18,15 +18,16 @@ namespace NET_MAUI_App.Pages
         public RegisterPage()
         {
             NavigationPage.SetHasNavigationBar(this, false);
-            BackgroundColor = Colors.White; 
+            RestaurantUi.PageTheme(this);
             createButton.BackgroundColor = RestaurantUi.Blue;
             createButton.TextColor = Colors.White;
             createButton.Clicked += OnCreateAccountClicked;
 
             foreach (var entry in new[] { nameEntry, emailEntry, passwordEntry, confirmPasswordEntry })
             {
-                entry.BackgroundColor = Colors.White;
-                entry.PlaceholderColor = RestaurantUi.Muted;
+                RestaurantUi.SurfaceTheme(entry);
+                entry.SetAppThemeColor(Entry.TextColorProperty, RestaurantUi.Ink, RestaurantUi.DarkInk);
+                entry.SetAppThemeColor(Entry.PlaceholderColorProperty, RestaurantUi.Muted, RestaurantUi.DarkMuted);
                 entry.FontSize = 16;
             }
 

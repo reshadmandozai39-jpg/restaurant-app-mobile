@@ -8,25 +8,51 @@ namespace NET_MAUI_App.Pages
 
         public HomePage()
         {
-            Title = "Start";
-            BackgroundColor = RestaurantUi.Background;
-            var menuButton = RestaurantUi.PrimaryButton("Menü ansehen");
-            menuButton.Command = new Command(async () => await Shell.Current.GoToAsync("//menu"));
-            var cartButton = RestaurantUi.PrimaryButton("Zum Warenkorb");
-            cartButton.Command = new Command(async () => await Shell.Current.GoToAsync("//cart"));
-            var offers = new VerticalStackLayout { Spacing = 10 };
-            foreach (var item in RestaurantOrderService.Menu)
+            Title = "Roger Restaurant";
+            RestaurantUi.PageTheme(this);
+            var title = new Grid
             {
-                offers.Children.Add(RestaurantUi.Card(new VerticalStackLayout
+                ColumnDefinitions = { new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Star) },
+                ColumnSpacing = 10,
+                VerticalOptions = LayoutOptions.Center,
+                Padding = new Thickness(0, 4)
+            };
+            var logo = new Image
+            {
+                Source = "logo.png",
+                WidthRequest = 40,
+                HeightRequest = 40,
+                Aspect = Aspect.AspectFit,
+                VerticalOptions = LayoutOptions.Center
+            };
+            SemanticProperties.SetDescription(logo, "Logo von Roger Restaurant");
+            title.Add(logo);
+            title.Add(new Label
+            {
+                Text = "Roger Restaurant",
+                TextColor = Colors.White,
+                FontSize = 18,
+                FontAttributes = FontAttributes.Bold,
+                VerticalOptions = LayoutOptions.Center,
+                LineBreakMode = LineBreakMode.TailTruncation
+            }, 1);
+            Shell.SetTitleView(this, title);
+            var menuButton = RestaurantUi.PrimaryButton("Menü ansehen");
+            menuButton.Command = new Command(async () => await Shell.Current.GoToAsync("menu-selection"));
+            var offers = new VerticalStackLayout { Spacing = 10 };
+            var featured = RestaurantOrderService.Menu
+                .Where(item => item.Id is "tagesmenue" or "vegi-menue");
+            foreach (var item in featured)
+            {
+                var row = new Grid
                 {
-                    Spacing = 4,
-                    Children =
-                    {
-                        RestaurantUi.Heading($"{item.Emoji}  {item.Name}", 16),
-                        RestaurantUi.Caption(item.Description),
-                        RestaurantUi.Caption($"CHF {item.Price:F2}")
-                    }
-                }));
+                    ColumnDefinitions = { new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto) },
+                    ColumnSpacing = 12
+                };
+                row.Add(new Label { Text = item.Emoji, FontSize = 26, VerticalOptions = LayoutOptions.Center });
+                row.Add(new VerticalStackLayout { Spacing = 4, Children = { RestaurantUi.Heading(item.Name, 16), RestaurantUi.Caption(item.Description) } }, 1);
+                row.Add(RestaurantUi.Heading($"CHF {item.Price:F2}", 15), 2);
+                offers.Children.Add(RestaurantUi.Card(row));
             }
 
             Content = RestaurantUi.PageContent(new VerticalStackLayout
@@ -38,12 +64,16 @@ namespace NET_MAUI_App.Pages
                     RestaurantUi.Card(new VerticalStackLayout
                     {
                         Spacing = 8,
-                        Children = { RestaurantUi.Heading("Hunger?", 18), RestaurantUi.Caption("Entdecke unsere Menüs und bestelle direkt über dein Smartphone."), menuButton }
+                        Children = { RestaurantUi.Heading("Hunger?", 18), RestaurantUi.Caption("Entdecke unsere Beispielmenüs."), menuButton }
                     }),
                     RestaurantUi.Heading("Heute im Angebot", 18),
                     offers,
-                    cartButton,
-                    RestaurantUi.Caption("Frisch gekocht in Bern · Preise in CHF")
+                    RestaurantUi.Card(new VerticalStackLayout
+                    {
+                        Spacing = 6,
+                        Children = { RestaurantUi.Heading("Gratis-Menü", 17), RestaurantUi.Caption("Das Bonusprogramm ist noch nicht angebunden.") }
+                    }),
+                    RestaurantUi.Caption("Beispielmenüs und Beispielpreise in CHF")
                 }
             });
         }

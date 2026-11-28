@@ -7,6 +7,7 @@ namespace NET_MAUI_App
         public App()
         {
             InitializeComponent();
+            UserAppTheme = Preferences.Default.Get("restaurant_theme", "light") == "dark" ? AppTheme.Dark : AppTheme.Light;
         }
 
         protected override Window CreateWindow(IActivationState? activationState)

@@ -7,7 +7,7 @@ public class FaqPage : ContentPage
     public FaqPage()
     {
         Title = "Häufige Fragen";
-        BackgroundColor = RestaurantUi.Background;
+        RestaurantUi.PageTheme(this);
         var questions = new VerticalStackLayout { Spacing = 8 };
         Add("Kann ich bar bezahlen?", "Nein. Stripe Checkout fordert Karte und TWINT an, sofern diese für dein Stripe-Konto im Testmodus verfügbar sind. Es werden nur Testzahlungen verarbeitet.");
         Add("Wie viele Personen pro Tisch?", "Pro Tisch sind maximal 8 Personen vorgesehen.");
@@ -28,13 +28,12 @@ public class FaqPage : ContentPage
         {
             var preview = RestaurantUi.Caption(answer);
             preview.FontSize = 14;
-            preview.TextColor = Color.FromArgb("#475569");
             preview.MaxLines = 2;
             preview.LineBreakMode = LineBreakMode.TailTruncation;
 
             var details = RestaurantUi.Caption(answer);
             details.FontSize = 14;
-            details.TextColor = RestaurantUi.Ink;
+            RestaurantUi.TextTheme(details);
             details.LineHeight = 1.25;
 
             var answerContainer = new Border
@@ -48,6 +47,7 @@ public class FaqPage : ContentPage
                 Content = details,
                 IsVisible = false
             };
+            answerContainer.SetAppThemeColor(VisualElement.BackgroundColorProperty, Color.FromArgb("#F8FAFC"), RestaurantUi.DarkBackground);
 
             var indicator = new Label
             {
@@ -58,6 +58,7 @@ public class FaqPage : ContentPage
                 VerticalOptions = LayoutOptions.Center,
                 HorizontalOptions = LayoutOptions.End
             };
+            indicator.SetAppThemeColor(Label.TextColorProperty, RestaurantUi.Muted, RestaurantUi.DarkMuted);
 
             var header = new Grid
             {

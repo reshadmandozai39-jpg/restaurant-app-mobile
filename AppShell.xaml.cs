@@ -9,6 +9,7 @@ namespace NET_MAUI_App
         public AppShell()
         {
             InitializeComponent();
+            Routing.RegisterRoute("menu-selection", typeof(MenuPage));
         }
 
         public static async Task DisplaySnackbarAsync(string message)

@@ -5,78 +5,60 @@ namespace NET_MAUI_App.Pages
     public class ProfilePage : ContentPage
     {
         private readonly Label nameLabel = RestaurantUi.Heading("Mein Konto", 18);
+        private readonly Label avatar = new() { Text = "G", TextColor = Colors.White, FontSize = 24, FontAttributes = FontAttributes.Bold, HorizontalTextAlignment = TextAlignment.Center, VerticalTextAlignment = TextAlignment.Center };
         private readonly Label draftCount = RestaurantUi.Caption(string.Empty);
-        private readonly Entry backendUrl = new()
-        {
-            Placeholder = "https://dein-backend.example.com",
-            Keyboard = Keyboard.Url,
-            TextColor = RestaurantUi.Ink,
-            PlaceholderColor = RestaurantUi.Muted,
-            FontSize = 14,
-            BackgroundColor = Colors.White
-        };
-        private readonly Label backendStatus = RestaurantUi.Caption("Für Android ist eine öffentliche HTTPS-Adresse erforderlich.");
 
         public ProfilePage()
         {
             Title = "Mein Konto";
-            BackgroundColor = RestaurantUi.Background;
+            RestaurantUi.PageTheme(this);
 
-            var logoutButton = RestaurantUi.PrimaryButton("Abmelden");
+            var logoutButton = AccountButton("Abmelden", FluentUI.sign_out_24_regular);
             logoutButton.Clicked += OnLogoutClicked;
+            var avatarCircle = new Border
+            {
+                BackgroundColor = RestaurantUi.Blue,
+                StrokeThickness = 0,
+                StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 36 },
+                WidthRequest = 64,
+                HeightRequest = 64,
+                Content = avatar
+            };
+            var profile = new Grid
+            {
+                ColumnDefinitions = { new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Star) },
+                ColumnSpacing = 14
+            };
+            profile.Add(avatarCircle);
+            profile.Add(new VerticalStackLayout { Spacing = 4, VerticalOptions = LayoutOptions.Center, Children = { nameLabel, RestaurantUi.Caption("Lokales Konto · Roger Restaurant Bern") } }, 1);
+            var bonus = RestaurantUi.Card(new VerticalStackLayout
+            {
+                Spacing = 8,
+                Children = { RestaurantUi.Heading("Gratis-Menü", 17), RestaurantUi.Caption("Das Bonusprogramm ist noch nicht angebunden.") }
+            });
+            bonus.SetAppThemeColor(VisualElement.BackgroundColorProperty, Color.FromArgb("#E8F8F3"), Color.FromArgb("#16433D"));
+            var historyButton = AccountButton("Bisherige Bestellungen", FluentUI.receipt_24_regular);
+            historyButton.Clicked += async (_, _) => await Navigation.PushAsync(new OrderHistoryPage());
+            var paymentButton = AccountButton("Zahlungsarten", FluentUI.payment_24_regular);
+            paymentButton.Clicked += async (_, _) => await DisplayAlertAsync("Zahlungsarten", "Karte und TWINT werden im Stripe-Checkout ausgewählt, sofern verfügbar. Die App speichert keine Zahlungsdaten.", "OK");
+            var settingsButton = AccountButton("Einstellungen", FluentUI.settings_24_regular);
+            settingsButton.Clicked += async (_, _) => await Navigation.PushAsync(new SettingsPage());
+            var stats = new Grid
+            {
+                ColumnDefinitions = { new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Star) },
+                ColumnSpacing = 10
+            };
+            stats.Add(RestaurantUi.Card(new VerticalStackLayout { Children = { RestaurantUi.Caption("Besuche"), RestaurantUi.Heading("0", 22) } }));
+            stats.Add(RestaurantUi.Card(new VerticalStackLayout { Children = { RestaurantUi.Caption("Gesamtausgaben"), RestaurantUi.Heading("CHF 0.00", 20) } }), 1);
 
             Content = RestaurantUi.PageContent(new VerticalStackLayout
             {
-                Spacing = 16,
+                Spacing = 12,
                 Children =
                 {
-                    RestaurantUi.Heading("Mein Konto"),
-                    RestaurantUi.Card(new VerticalStackLayout
-                    {
-                        Spacing = 6,
-                        Children = { nameLabel, RestaurantUi.Caption("Mitglied · Roger Restaurant Bern") }
-                    }),
-                    RestaurantUi.Card(new VerticalStackLayout
-                    {
-                        Spacing = 8,
-                        Children =
-                        {
-                            RestaurantUi.Heading("Gratis-Menü", 17),
-                            RestaurantUi.Caption("Das Bonusprogramm ist noch nicht angebunden.")
-                        }
-                    }),
-                    RestaurantUi.Card(new VerticalStackLayout
-                    {
-                        Spacing = 8,
-                        Children =
-                        {
-                            RestaurantUi.Heading("Bestellungen", 17),
-                            draftCount,
-                            RestaurantUi.Caption("Entwürfe sind nicht bezahlt und werden nicht an das Restaurant gesendet."),
-                            new Button
-                            {
-                                Text = "Gespeicherte Entwürfe anzeigen", BackgroundColor = Colors.White, TextColor = RestaurantUi.Blue,
-                                Command = new Command(async () => await Navigation.PushAsync(new OrderHistoryPage()))
-                            }
-                        }
-                    }),
-                    RestaurantUi.Card(new VerticalStackLayout
-                    {
-                        Spacing = 8,
-                        Children =
-                        {
-                            RestaurantUi.Heading("Backend für Android", 17),
-                            RestaurantUi.Caption("Trage hier die HTTPS-Adresse deines gehosteten Backends ein."),
-                            backendUrl,
-                            backendStatus,
-                            new Button
-                            {
-                                Text = "Backend-Adresse speichern", BackgroundColor = Colors.White, TextColor = RestaurantUi.Blue,
-                                Command = new Command(async () => await SaveBackendUrlAsync())
-                            }
-                        }
-                    }),
-                    logoutButton
+                    profile, bonus, stats,
+                    RestaurantUi.Caption("Keine Online-Kontodaten angebunden; die Werte sind Platzhalter."),
+                    historyButton, draftCount, paymentButton, settingsButton, logoutButton
                 }
             });
         }
@@ -87,11 +69,9 @@ namespace NET_MAUI_App.Pages
             try
             {
                 nameLabel.Text = await new LocalAccountService().GetDisplayNameAsync();
-                draftCount.Text = $"{RestaurantStorage.GetDrafts().Count} gespeicherte Entwürfe";
-                backendUrl.Text = Preferences.Default.Get("restaurant_backend_url", string.Empty);
-                backendStatus.Text = string.IsNullOrWhiteSpace(backendUrl.Text)
-                    ? "Noch keine Backend-Adresse gespeichert."
-                    : "Backend-Adresse ist auf diesem Gerät gespeichert.";
+                var displayName = nameLabel.Text.Trim();
+                avatar.Text = string.IsNullOrEmpty(displayName) ? "G" : displayName[..1].ToUpperInvariant();
+                draftCount.Text = $"{RestaurantStorage.GetDrafts().Count} lokale, unbezahlte Entwürfe";
             }
             catch (Exception ex)
             {
@@ -99,27 +79,20 @@ namespace NET_MAUI_App.Pages
             }
         }
 
-        private async Task SaveBackendUrlAsync()
+        private static Button AccountButton(string text, string icon)
         {
-            var value = backendUrl.Text?.Trim() ?? string.Empty;
-            if (!Uri.TryCreate(value, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps ||
-                string.IsNullOrWhiteSpace(uri.Host) || !string.IsNullOrEmpty(uri.UserInfo) ||
-                !string.IsNullOrEmpty(uri.Query) || !string.IsNullOrEmpty(uri.Fragment))
+            var image = new FontImageSource { Glyph = icon, FontFamily = FluentUI.FontFamily, Size = 24 };
+            image.SetAppThemeColor(FontImageSource.ColorProperty, RestaurantUi.Ink, RestaurantUi.DarkInk);
+            var button = new Button
             {
-                await DisplayAlertAsync("Backend-Adresse", "Bitte eine gültige öffentliche HTTPS-Adresse ohne Benutzername, Passwort oder Abfrageparameter eingeben.", "OK");
-                return;
-            }
-
-            try
-            {
-                Preferences.Default.Set("restaurant_backend_url", uri.AbsoluteUri.TrimEnd('/'));
-                backendStatus.Text = "Backend-Adresse ist auf diesem Gerät gespeichert.";
-                await DisplayAlertAsync("Backend-Adresse", "Gespeichert. Stripe-Anfragen verwenden jetzt diese HTTPS-Adresse.", "OK");
-            }
-            catch (Exception ex)
-            {
-                await DisplayAlertAsync("Speichern fehlgeschlagen", ex.Message, "OK");
-            }
+                Text = text, ImageSource = image,
+                ContentLayout = new Button.ButtonContentLayout(Button.ButtonContentLayout.ImagePosition.Left, 12),
+                BorderColor = Color.FromArgb("#CBD5E1"), BorderWidth = 1, CornerRadius = 10,
+                FontAttributes = FontAttributes.Bold, MinimumHeightRequest = 56
+            };
+            RestaurantUi.SurfaceTheme(button);
+            button.SetAppThemeColor(Button.TextColorProperty, RestaurantUi.Ink, RestaurantUi.DarkInk);
+            return button;
         }
 
         private void OnLogoutClicked(object? sender, EventArgs e)

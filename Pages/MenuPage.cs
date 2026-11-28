@@ -12,20 +12,36 @@ namespace NET_MAUI_App.Pages
         public MenuPage()
         {
             Title = "Menü auswählen";
-            BackgroundColor = RestaurantUi.Background;
+            RestaurantUi.PageTheme(this);
             var cartButton = RestaurantUi.PrimaryButton("Zum Warenkorb");
             cartButton.Command = new Command(async () => await Shell.Current.GoToAsync("//cart"));
-            Content = RestaurantUi.PageContent(new VerticalStackLayout
+            var progress = new Grid
             {
-                Spacing = 14,
-                Children =
-                {
-                    RestaurantUi.Heading("Heute im Angebot"),
-                    RestaurantUi.Caption("Beispielmenüs und Beispielpreise · Bargeld und TWINT nicht verfügbar · Kreditkarte nur im Stripe-Testmodus."),
-                    new ScrollView { Orientation = ScrollOrientation.Horizontal, Content = filters },
-                    menuList, cartSummary, cartButton
-                }
+                ColumnDefinitions = { new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Star) },
+                ColumnSpacing = 4
+            };
+            progress.Add(new BoxView { Color = Color.FromArgb("#0D9488"), HeightRequest = 4 });
+            progress.Add(new BoxView { Color = Color.FromArgb("#E2E8F0"), HeightRequest = 4 }, 1);
+            var content = new Grid
+            {
+                RowDefinitions = { new RowDefinition(GridLength.Auto), new RowDefinition(GridLength.Star), new RowDefinition(GridLength.Auto) },
+                RowSpacing = 10,
+                Padding = new Thickness(18, 16, 18, 12),
+                MaximumWidthRequest = 600,
+                HorizontalOptions = LayoutOptions.Fill
+            };
+            content.Add(new VerticalStackLayout
+            {
+                Spacing = 8,
+                Children = { progress, RestaurantUi.Caption("Schritt 1 von 2: Auswahl"), new ScrollView { Orientation = ScrollOrientation.Horizontal, Content = filters } }
             });
+            content.Add(new ScrollView { Content = menuList }, 0, 1);
+            content.Add(new VerticalStackLayout
+            {
+                Spacing = 8,
+                Children = { RestaurantUi.Card(cartSummary), cartButton, RestaurantUi.Caption("Beispielmenüs und -preise · nur Stripe-Testzahlungen.") }
+            }, 0, 2);
+            Content = content;
         }
 
         protected override void OnAppearing()
@@ -69,26 +85,40 @@ namespace NET_MAUI_App.Pages
             foreach (var item in items)
             {
                 var quantity = cart.FirstOrDefault(line => line.Item.Id == item.Id)?.Quantity ?? 0;
-                var minus = new Button { Text = "−", FontSize = 16, BackgroundColor = Color.FromArgb("#EFF3F9"), TextColor = RestaurantUi.Ink, IsEnabled = quantity > 0 };
+                var minus = new Button { Text = "−", FontSize = 16, BackgroundColor = Colors.White, TextColor = RestaurantUi.Ink, BorderColor = Color.FromArgb("#CBD5E1"), BorderWidth = 1, CornerRadius = 8, WidthRequest = 40, HeightRequest = 40, Padding = 0, IsEnabled = quantity > 0 };
                 minus.Clicked += (_, _) => ChangeQuantity(item.Id, false);
-                var plus = RestaurantUi.PrimaryButton("+");
+                var plus = new Button { Text = "+", FontSize = 16, BackgroundColor = Colors.White, TextColor = RestaurantUi.Ink, BorderColor = Color.FromArgb("#CBD5E1"), BorderWidth = 1, CornerRadius = 8, WidthRequest = 40, HeightRequest = 40, Padding = 0 };
                 plus.Clicked += (_, _) => ChangeQuantity(item.Id, true);
-                menuList.Children.Add(RestaurantUi.Card(new VerticalStackLayout
+                RestaurantUi.SurfaceTheme(minus);
+                RestaurantUi.SurfaceTheme(plus);
+                minus.SetAppThemeColor(Button.TextColorProperty, RestaurantUi.Ink, RestaurantUi.DarkInk);
+                plus.SetAppThemeColor(Button.TextColorProperty, RestaurantUi.Ink, RestaurantUi.DarkInk);
+                var heading = new Grid { ColumnDefinitions = { new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto) }, ColumnSpacing = 8 };
+                heading.Add(RestaurantUi.Heading(item.Name, 16));
+                heading.Add(RestaurantUi.Heading($"CHF {item.Price:F2}", 15), 1);
+                var quantityLabel = RestaurantUi.Heading(quantity.ToString(), 14);
+                quantityLabel.VerticalOptions = LayoutOptions.Center;
+                var controls = new HorizontalStackLayout
                 {
                     Spacing = 8,
-                    Children =
-                    {
-                        RestaurantUi.Heading($"{item.Emoji}  {item.Name}", 17),
-                        RestaurantUi.Caption(item.Description),
-                        RestaurantUi.Heading($"CHF {item.Price:F2}", 15),
-                        RestaurantUi.Caption($"{counts.GetValueOrDefault(item.Id)}× in gespeicherten Entwürfen"),
-                        new HorizontalStackLayout
-                        {
-                            Spacing = 12,
-                            Children = { minus, new Label { Text = quantity.ToString(), TextColor = RestaurantUi.Ink, VerticalOptions = LayoutOptions.Center }, plus }
-                        }
-                    }
-                }));
+                    HorizontalOptions = LayoutOptions.End,
+                    Children = { minus, quantityLabel, plus }
+                };
+                var row = new Grid { ColumnDefinitions = { new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Star) }, ColumnSpacing = 12 };
+                row.Add(new Label { Text = item.Emoji, FontSize = 28, VerticalOptions = LayoutOptions.Center });
+                row.Add(new VerticalStackLayout
+                {
+                    Spacing = 4,
+                    Children = { heading, RestaurantUi.Caption(item.Description), RestaurantUi.Caption($"{counts.GetValueOrDefault(item.Id)}× in gespeicherten Entwürfen"), controls }
+                }, 1);
+                var itemCard = RestaurantUi.Card(row);
+                itemCard.Padding = 12;
+                if (quantity > 0)
+                {
+                    itemCard.Stroke = RestaurantUi.Blue;
+                    itemCard.SetAppThemeColor(VisualElement.BackgroundColorProperty, Color.FromArgb("#F1F5FF"), Color.FromArgb("#1E3A5F"));
+                }
+                menuList.Children.Add(itemCard);
             }
             cartSummary.Text = $"{cart.Sum(line => line.Quantity)} Menüs · CHF {RestaurantOrderService.GetTotal():F2}";
         }
@@ -101,6 +131,11 @@ namespace NET_MAUI_App.Pages
                 BackgroundColor = selectedCategory == category ? RestaurantUi.Blue : Colors.White,
                 TextColor = selectedCategory == category ? Colors.White : RestaurantUi.Ink
             };
+            if (selectedCategory != category)
+            {
+                RestaurantUi.SurfaceTheme(button);
+                button.SetAppThemeColor(Button.TextColorProperty, RestaurantUi.Ink, RestaurantUi.DarkInk);
+            }
             button.Clicked += (_, _) => { selectedCategory = category; RefreshMenu(); };
             filters.Children.Add(button);
         }

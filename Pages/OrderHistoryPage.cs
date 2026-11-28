@@ -9,13 +9,14 @@ public class OrderHistoryPage : ContentPage
     public OrderHistoryPage()
     {
         Title = "Gespeicherte Entwürfe";
-        BackgroundColor = RestaurantUi.Background;
+        RestaurantUi.PageTheme(this);
         Content = RestaurantUi.PageContent(new VerticalStackLayout
         {
             Spacing = 14,
             Children =
             {
-                RestaurantUi.Heading("Gespeicherte Entwürfe"),
+                RestaurantUi.Caption("Der Online-Bestellverlauf ist noch nicht angebunden."),
+                RestaurantUi.Heading("Gespeicherte Entwürfe", 18),
                 RestaurantUi.Caption("Nur auf diesem Gerät gespeichert. Nicht bezahlt und nicht an das Restaurant gesendet."),
                 list
             }
@@ -32,8 +33,15 @@ public class OrderHistoryPage : ContentPage
             if (drafts.Count == 0) list.Children.Add(RestaurantUi.Caption("Noch keine Entwürfe gespeichert."));
             foreach (var draft in drafts)
             {
+                var header = new Grid
+                {
+                    ColumnDefinitions = { new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto) },
+                    ColumnSpacing = 12
+                };
+                header.Add(RestaurantUi.Heading(draft.CreatedAt.ToString("dd.MM.yyyy"), 16));
+                header.Add(RestaurantUi.Heading($"CHF {draft.Total:F2}", 16), 1);
                 var details = new VerticalStackLayout { Spacing = 6 };
-                details.Children.Add(RestaurantUi.Heading($"{draft.CreatedAt:g} · CHF {draft.Total:F2}", 16));
+                details.Children.Add(header);
                 details.Children.Add(RestaurantUi.Caption($"Unbezahlt · Tisch {draft.TableNumber} · {draft.Persons} Personen · {draft.PaymentMethod}"));
                 foreach (var line in draft.Lines)
                     details.Children.Add(RestaurantUi.Caption($"{line.Quantity} × {line.Name} · CHF {line.Price * line.Quantity:F2}"));

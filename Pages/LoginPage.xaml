@@ -3,24 +3,24 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              x:Class="NET_MAUI_App.Pages.LoginPage"
              NavigationPage.HasNavigationBar="False"
-             BackgroundColor="White">
+             BackgroundColor="{AppThemeBinding Light=White, Dark=#0F172A}">
     <ScrollView>
         <VerticalStackLayout Padding="24,32" Spacing="12" MaximumWidthRequest="420">
             <Image Source="logo.png" HeightRequest="110" WidthRequest="110" Aspect="AspectFit"
                    SemanticProperties.Description="Logo von Roger Restaurant" />
-            <Label Text="Roger Restaurant" FontSize="23" FontAttributes="Bold" TextColor="#172033"
+            <Label Text="Roger Restaurant" FontSize="23" FontAttributes="Bold" TextColor="{AppThemeBinding Light=#172033, Dark=#F1F5F9}"
                    HorizontalTextAlignment="Center" SemanticProperties.HeadingLevel="Level1" />
-            <Label Text="Bern" FontSize="13" TextColor="#64748B" HorizontalTextAlignment="Center" />
+            <Label Text="Bern" FontSize="13" TextColor="{AppThemeBinding Light=#64748B, Dark=#CBD5E1}" HorizontalTextAlignment="Center" />
 
-            <Label Text="Anmeldung" Margin="0,20,0,0" FontSize="20" FontAttributes="Bold" TextColor="#172033" />
-            <Label Text="Benutzername" FontSize="14" TextColor="#172033" />
+            <Label Text="Anmeldung" Margin="0,20,0,0" FontSize="20" FontAttributes="Bold" TextColor="{AppThemeBinding Light=#172033, Dark=#F1F5F9}" />
+            <Label Text="Benutzername" FontSize="14" TextColor="{AppThemeBinding Light=#172033, Dark=#F1F5F9}" />
             <Entry x:Name="EmailEntry" Placeholder="Deine E-Mail-Adresse" Keyboard="Email"
-                   FontSize="16" TextColor="#172033" PlaceholderColor="#6B7280" BackgroundColor="White"
+                   FontSize="16" TextColor="{AppThemeBinding Light=#172033, Dark=#F1F5F9}" PlaceholderColor="{AppThemeBinding Light=#6B7280, Dark=#CBD5E1}" BackgroundColor="{AppThemeBinding Light=White, Dark=#1E293B}"
                    SemanticProperties.Description="E-Mail-Adresse" />
             <Label x:Name="EmailError" Text="Bitte gib deine E-Mail-Adresse ein." TextColor="Red" IsVisible="False" />
-            <Label Text="Passwort" FontSize="14" TextColor="#172033" />
+            <Label Text="Passwort" FontSize="14" TextColor="{AppThemeBinding Light=#172033, Dark=#F1F5F9}" />
             <Entry x:Name="PasswordEntry" Placeholder="Dein Passwort" IsPassword="True"
-                   FontSize="16" TextColor="#172033" PlaceholderColor="#6B7280" BackgroundColor="White"
+                   FontSize="16" TextColor="{AppThemeBinding Light=#172033, Dark=#F1F5F9}" PlaceholderColor="{AppThemeBinding Light=#6B7280, Dark=#CBD5E1}" BackgroundColor="{AppThemeBinding Light=White, Dark=#1E293B}"
                    SemanticProperties.Description="Passwort" />
             <Label x:Name="PasswordError" Text="Bitte gib dein Passwort ein." TextColor="Red" IsVisible="False" />
             <Label x:Name="LoginError" TextColor="Red" IsVisible="False" />
