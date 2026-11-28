@@ -7,6 +7,9 @@ namespace NET_MAUI_App.Pages
         private readonly Label nameLabel = RestaurantUi.Heading("Mein Konto", 18);
         private readonly Label avatar = new() { Text = "G", TextColor = Colors.White, FontSize = 24, FontAttributes = FontAttributes.Bold, HorizontalTextAlignment = TextAlignment.Center, VerticalTextAlignment = TextAlignment.Center };
         private readonly Label draftCount = RestaurantUi.Caption(string.Empty);
+        private readonly Label paidOrderCount = RestaurantUi.Heading("…", 22);
+        private readonly Label totalSpending = RestaurantUi.Heading("…", 20);
+        private readonly Label paymentHistoryStatus = RestaurantUi.Caption("Stripe-Testzahlungen · nur auf diesem Gerät");
 
         public ProfilePage()
         {
@@ -48,16 +51,15 @@ namespace NET_MAUI_App.Pages
                 ColumnDefinitions = { new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Star) },
                 ColumnSpacing = 10
             };
-            stats.Add(RestaurantUi.Card(new VerticalStackLayout { Children = { RestaurantUi.Caption("Besuche"), RestaurantUi.Heading("0", 22) } }));
-            stats.Add(RestaurantUi.Card(new VerticalStackLayout { Children = { RestaurantUi.Caption("Gesamtausgaben"), RestaurantUi.Heading("CHF 0.00", 20) } }), 1);
+            stats.Add(RestaurantUi.Card(new VerticalStackLayout { Children = { RestaurantUi.Caption("Bezahlte Bestellungen"), paidOrderCount } }));
+            stats.Add(RestaurantUi.Card(new VerticalStackLayout { Children = { RestaurantUi.Caption("Gesamtausgaben"), totalSpending } }), 1);
 
             Content = RestaurantUi.PageContent(new VerticalStackLayout
             {
                 Spacing = 12,
                 Children =
                 {
-                    profile, bonus, stats,
-                    RestaurantUi.Caption("Keine Online-Kontodaten angebunden; die Werte sind Platzhalter."),
+                    profile, bonus, stats, paymentHistoryStatus,
                     historyButton, draftCount, paymentButton, settingsButton, logoutButton
                 }
             });
@@ -72,10 +74,27 @@ namespace NET_MAUI_App.Pages
                 var displayName = nameLabel.Text.Trim();
                 avatar.Text = string.IsNullOrEmpty(displayName) ? "G" : displayName[..1].ToUpperInvariant();
                 draftCount.Text = $"{RestaurantStorage.GetDrafts().Count} lokale, unbezahlte Entwürfe";
+                var sessionIds = await StripePurchaseHistory.GetSessionIdsAsync();
+                var purchases = new List<StripePaymentDetails>();
+                foreach (var sessionId in sessionIds)
+                {
+                    var purchase = await RestaurantStripeClient.GetPaymentDetailsAsync(sessionId);
+                    if (!purchase.Paid)
+                        throw new InvalidOperationException($"Stripe bestätigt die gespeicherte Bestellung {sessionId} derzeit nicht als bezahlt.");
+                    purchases.Add(purchase);
+                }
+                paidOrderCount.Text = purchases.Count.ToString();
+                var currency = purchases.Select(purchase => purchase.Currency).Distinct(StringComparer.Ordinal).ToArray();
+                totalSpending.Text = currency.Length <= 1
+                    ? $"{purchases.Sum(purchase => purchase.Amount):F2} {currency.FirstOrDefault() ?? "CHF"}"
+                    : "Mehrere Währungen";
             }
             catch (Exception ex)
             {
-                await DisplayAlertAsync("Konto", $"Der Name konnte nicht geladen werden: {ex.Message}", "OK");
+                paidOrderCount.Text = "–";
+                totalSpending.Text = "–";
+                paymentHistoryStatus.Text = "Zahlungsdaten konnten nicht bei Stripe geprüft werden.";
+                await DisplayAlertAsync("Konto", $"Die Kontodaten konnten nicht vollständig geladen werden: {ex.Message}", "OK");
             }
         }
 

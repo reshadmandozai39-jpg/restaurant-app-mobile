@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.Maui.Controls.Shapes;
 using NET_MAUI_App.Services;
 
@@ -17,12 +18,14 @@ public class CartPage : ContentPage
     private readonly Label total = RestaurantUi.Heading(string.Empty, 15);
     private readonly Button twint = new() { Text = "TWINT" };
     private readonly Button card = new() { Text = "Kreditkarte" };
+    private readonly Button pendingPayment = new() { Text = "Offene Zahlung prüfen", BackgroundColor = Colors.White, TextColor = RestaurantUi.Blue };
     private readonly Border personsBorder;
     private readonly Border tableBorder;
     private readonly Border summaryBorder;
     private ScrollView? detailsView;
     private string payment = "TWINT";
     private bool loading;
+    private bool keepOverviewOnAppearing;
 
     public CartPage()
     {
@@ -62,11 +65,17 @@ public class CartPage : ContentPage
         };
         card.Clicked += (_, _) => SelectPayment("Kreditkarte");
         twint.Clicked += (_, _) => SelectPayment("TWINT");
+        pendingPayment.Clicked += async (_, _) =>
+        {
+            try { ShowOverview(0, 0, Array.Empty<RestaurantCartLine>(), pendingOnly: true); }
+            catch (Exception ex) { await DisplayAlertAsync("Zahlungsstatus", ex.Message, "OK"); }
+        };
     }
 
     protected override async void OnAppearing()
     {
         base.OnAppearing();
+        if (keepOverviewOnAppearing) return;
         try
         {
             loading = true;
@@ -188,7 +197,9 @@ public class CartPage : ContentPage
 
     private void ShowDetails()
     {
+        keepOverviewOnAppearing = false;
         Title = "Warenkorb";
+        pendingPayment.IsVisible = !string.IsNullOrWhiteSpace(Preferences.Default.Get("restaurant_stripe_session", string.Empty));
         var cart = RestaurantOrderService.GetCart();
         menuCount.Text = $"{cart.Sum(line => line.Quantity)} Menüs";
         total.Text = $"CHF {cart.Sum(line => line.LineTotal):F2}";
@@ -250,7 +261,7 @@ public class CartPage : ContentPage
                 RestaurantUi.Caption("Maximum 8 Personen pro Tisch."), personsError,
                 RestaurantUi.Heading("Zahlungsart", 17), paymentButtons, paymentError,
                 RestaurantUi.Caption("Bargeld ist nicht verfügbar. Karte oder TWINT im Stripe-Checkout, sofern verfügbar; nur Testzahlungen."),
-                summaryBorder, cartError, next, menu
+                summaryBorder, cartError, pendingPayment, next, menu
             }
         });
         Content = detailsView;
@@ -299,15 +310,20 @@ public class CartPage : ContentPage
         catch (Exception ex) { await DisplayAlertAsync("Warenkorb", $"Die Übersicht konnte nicht geladen werden: {ex.Message}", "OK"); }
     }
 
-    private void ShowOverview(int personCount, int tableNumber, IReadOnlyList<RestaurantCartLine> cart)
+    private void ShowOverview(int personCount, int tableNumber, IReadOnlyList<RestaurantCartLine> cart, bool pendingOnly = false)
     {
-        Title = "Übersicht";
+        Title = pendingOnly ? "Zahlungsstatus" : "Übersicht";
         var details = new VerticalStackLayout { Spacing = 0 };
-        AddOverviewRow("Tisch", tableNumber.ToString());
-        AddOverviewRow("Personen", personCount.ToString());
-        foreach (var line in cart) AddOverviewRow($"{line.Item.Name} × {line.Quantity}", $"CHF {line.LineTotal:F2}");
-        AddOverviewRow("Zahlungswunsch", payment);
-        AddOverviewRow("Total", $"CHF {cart.Sum(line => line.LineTotal):F2}", last: true);
+        if (pendingOnly)
+            details.Children.Add(RestaurantUi.Caption("Der Status der offenen Stripe-Testzahlung wird geprüft."));
+        else
+        {
+            AddOverviewRow("Tisch", tableNumber.ToString());
+            AddOverviewRow("Personen", personCount.ToString());
+            foreach (var line in cart) AddOverviewRow($"{line.Item.Name} × {line.Quantity}", $"CHF {line.LineTotal:F2}");
+            AddOverviewRow("Zahlungswunsch", payment);
+            AddOverviewRow("Total", $"CHF {cart.Sum(line => line.LineTotal):F2}", last: true);
+        }
 
         void AddOverviewRow(string label, string value, bool last = false)
         {
@@ -349,7 +365,7 @@ public class CartPage : ContentPage
             HorizontalOptions = LayoutOptions.Center,
             Content = new Label { Text = FluentUI.checkmark_24_regular, FontFamily = FluentUI.FontFamily, FontSize = 32, TextColor = Colors.White, HorizontalTextAlignment = TextAlignment.Center, VerticalTextAlignment = TextAlignment.Center }
         };
-        var message = RestaurantUi.Caption("Stripe hat die Testzahlung bestätigt. Es wurde kein echter Betrag belastet.");
+        var message = RestaurantUi.Caption(string.Empty);
         message.HorizontalTextAlignment = TextAlignment.Center;
         var heading = RestaurantUi.Heading("Testzahlung erfolgreich!", 20);
         heading.HorizontalTextAlignment = TextAlignment.Center;
@@ -360,21 +376,52 @@ public class CartPage : ContentPage
         confirmation.Add(confirmationCard);
 
         var stripePay = RestaurantUi.PrimaryButton("Jetzt mit Stripe bezahlen");
+        var checkPayment = new Button { Text = "Zahlung prüfen", BackgroundColor = Colors.White, TextColor = RestaurantUi.Blue };
         stripePay.Clicked += async (_, _) =>
         {
             stripePay.IsEnabled = false;
+            checkPayment.IsEnabled = false;
+            keepOverviewOnAppearing = true;
             try
             {
+                if (!string.IsNullOrWhiteSpace(Preferences.Default.Get("restaurant_stripe_session", string.Empty)))
+                {
+                    await DisplayAlertAsync("Offene Zahlung", "Es gibt bereits eine offene Testzahlung. Bitte zuerst „Zahlung prüfen“ auswählen.", "OK");
+                    return;
+                }
                 var checkout = await RestaurantStripeClient.CreateCheckoutAsync(cart, personCount, tableNumber);
+                Preferences.Default.Set("restaurant_stripe_cart", SerializeCart(cart));
                 Preferences.Default.Set("restaurant_stripe_session", checkout.SessionId);
+#if ANDROID
+                try
+                {
+                    var result = await WebAuthenticator.Default.AuthenticateAsync(checkout.CheckoutUrl, new Uri("rogerrestaurant://stripe-return"));
+                    if (result.Properties.TryGetValue("result", out var returnResult) && returnResult == "success")
+                        await CheckPaymentAsync();
+                    else
+                        await DisplayAlertAsync("Stripe-Testzahlung", "Der Checkout wurde nicht abgeschlossen. Du kannst den Status mit „Zahlung prüfen“ kontrollieren.", "OK");
+                }
+                catch (TaskCanceledException)
+                {
+                    await DisplayAlertAsync("Stripe-Testzahlung", "Der Browser wurde geschlossen. Prüfe den Zahlungsstatus, bevor du erneut bezahlst.", "OK");
+                }
+#else
                 await Browser.Default.OpenAsync(checkout.CheckoutUrl, BrowserLaunchMode.SystemPreferred);
+#endif
             }
             catch (Exception ex) { await DisplayAlertAsync("Stripe-Testzahlung", ex.Message, "OK"); }
-            finally { stripePay.IsEnabled = true; }
+            finally
+            {
+                stripePay.IsEnabled = true;
+                checkPayment.IsEnabled = true;
+            }
         };
-        var checkPayment = new Button { Text = "Zahlung prüfen", BackgroundColor = Colors.White, TextColor = RestaurantUi.Blue };
-        checkPayment.Clicked += async (_, _) =>
+        checkPayment.Clicked += async (_, _) => await CheckPaymentAsync();
+
+        async Task CheckPaymentAsync()
         {
+            var paymentWasEnabled = stripePay.IsEnabled;
+            stripePay.IsEnabled = false;
             checkPayment.IsEnabled = false;
             try
             {
@@ -384,18 +431,43 @@ public class CartPage : ContentPage
                     await DisplayAlertAsync("Zahlungsstatus", "Starte zuerst die Stripe-Testzahlung.", "OK");
                     return;
                 }
-                if (!await RestaurantStripeClient.IsPaymentCompleteAsync(sessionId))
+                var details = await RestaurantStripeClient.GetPaymentDetailsAsync(sessionId);
+                if (!details.Paid)
                 {
-                    await DisplayAlertAsync("Zahlungsstatus", "Stripe hat noch keine erfolgreiche Zahlung bestätigt.", "OK");
+                    var discard = await DisplayAlertAsync("Zahlungsstatus", "Stripe hat die Zahlung noch nicht bestätigt. Wenn du den offenen Checkout verwirfst, wird eine später bestätigte Zahlung nicht mehr automatisch erkannt. Nur verwerfen, wenn du sicher bist, dass du den Checkout nicht mehr bezahlst.", "Checkout verwerfen", "Behalten");
+                    if (discard)
+                    {
+                        Preferences.Default.Remove("restaurant_stripe_session");
+                        Preferences.Default.Remove("restaurant_stripe_cart");
+                    }
                     return;
                 }
-                RestaurantOrderService.Clear();
+
+                await StripePurchaseHistory.AddPaidSessionAsync(details.SessionId);
+                var savedCart = Preferences.Default.Get("restaurant_stripe_cart", string.Empty);
+                var cartUnchanged = !string.IsNullOrEmpty(savedCart) && savedCart == SerializeCart(RestaurantOrderService.GetCart());
+                if (cartUnchanged) RestaurantOrderService.Clear();
                 Preferences.Default.Remove("restaurant_stripe_session");
+                Preferences.Default.Remove("restaurant_stripe_cart");
+                var method = details.PaymentMethod switch
+                {
+                    "card" => "Karte",
+                    "twint" => "TWINT",
+                    _ => details.PaymentMethod
+                };
+                message.Text = $"Stripe hat {details.Amount:F2} {details.Currency} mit {method} bestätigt. Es wurde kein echter Betrag belastet. Die Bestellung ist im Verlauf auf diesem Gerät gespeichert.";
+                if (!cartUnchanged)
+                    message.Text += " Dein aktueller Warenkorb wurde nicht verändert.";
+                keepOverviewOnAppearing = true;
                 confirmation.IsVisible = true;
             }
             catch (Exception ex) { await DisplayAlertAsync("Zahlungsstatus", ex.Message, "OK"); }
-            finally { checkPayment.IsEnabled = true; }
-        };
+            finally
+            {
+                stripePay.IsEnabled = paymentWasEnabled;
+                checkPayment.IsEnabled = true;
+            }
+        }
         var save = RestaurantUi.PrimaryButton("Entwurf lokal speichern");
         save.Clicked += async (_, _) =>
         {
@@ -417,7 +489,10 @@ public class CartPage : ContentPage
         };
         var edit = new Button { Text = "Menü ändern", BackgroundColor = Colors.White, TextColor = RestaurantUi.Blue };
         edit.Clicked += async (_, _) => await OpenMenuSelectionAsync();
-        change.Text = "Bestellung ändern";
+        change.Text = pendingOnly ? "Zurück zum Warenkorb" : "Bestellung ändern";
+        stripePay.IsVisible = !pendingOnly;
+        save.IsVisible = !pendingOnly;
+        edit.IsVisible = !pendingOnly;
         change.BorderColor = RestaurantUi.Blue;
         change.BorderWidth = 1;
         change.CornerRadius = 8;
@@ -433,15 +508,20 @@ public class CartPage : ContentPage
             Spacing = 12,
             Children =
             {
-                progress, RestaurantUi.Caption("Schritt 2 von 2: Übersicht"), RestaurantUi.Heading("Stimmt alles?"),
-                RestaurantUi.Caption("Bitte prüfe deine Auswahl."), RestaurantUi.Card(details),
+                progress, RestaurantUi.Caption(pendingOnly ? "Offene Testzahlung" : "Schritt 2 von 2: Übersicht"), RestaurantUi.Heading(pendingOnly ? "Zahlung prüfen" : "Stimmt alles?"),
+                RestaurantUi.Caption(pendingOnly ? "Stripe bestätigt den tatsächlichen Status." : "Bitte prüfe deine Auswahl."), RestaurantUi.Card(details),
                 stripePay, change,
                 RestaurantUi.Caption("Testzahlung: Die tatsächliche Zahlungsart wird im Stripe-Checkout gewählt, sofern verfügbar. Es wird kein echtes Geld belastet."),
                 checkPayment, save, edit
             }
         });
         Content = new Grid { Children = { overview, confirmation } };
+        if (pendingOnly) Dispatcher.Dispatch(async () => await CheckPaymentAsync());
     }
+
+    private static string SerializeCart(IReadOnlyList<RestaurantCartLine> cart) =>
+        JsonSerializer.Serialize(cart.OrderBy(line => line.Item.Id, StringComparer.Ordinal)
+            .Select(line => new { line.Item.Id, line.Quantity }));
 
     private static async Task OpenMenuSelectionAsync()
     {

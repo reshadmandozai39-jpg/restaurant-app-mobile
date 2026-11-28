@@ -33,14 +33,40 @@ public static class RestaurantStripeClient
         return new StripeCheckoutSession(id.GetString()!, checkoutUri);
     }
 
-    public static async Task<bool> IsPaymentCompleteAsync(string sessionId, CancellationToken cancellationToken = default)
+    public static async Task<StripePaymentDetails> GetPaymentDetailsAsync(string sessionId, CancellationToken cancellationToken = default)
     {
+        if (!sessionId.StartsWith("cs_test_", StringComparison.Ordinal))
+            throw new ArgumentException("Ungültige Stripe-Test-Checkout-ID.", nameof(sessionId));
+
         using var response = await Client.GetAsync(new Uri(GetBaseUri(), $"payments/{Uri.EscapeDataString(sessionId)}/status"), cancellationToken);
         var body = await response.Content.ReadAsStringAsync(cancellationToken);
         if (!response.IsSuccessStatusCode)
             throw new InvalidOperationException(ReadError(body, "Der Zahlungsstatus konnte nicht geprüft werden."));
+
         using var json = JsonDocument.Parse(body);
-        return json.RootElement.TryGetProperty("paid", out var paid) && paid.ValueKind == JsonValueKind.True;
+        var root = json.RootElement;
+        if (!root.TryGetProperty("paid", out var paid) || paid.ValueKind is not (JsonValueKind.True or JsonValueKind.False) ||
+            !root.TryGetProperty("amount", out var amount) || !amount.TryGetDecimal(out var amountValue) ||
+            !root.TryGetProperty("currency", out var currencyElement) || string.IsNullOrWhiteSpace(currencyElement.GetString()) ||
+            !root.TryGetProperty("paymentMethod", out var methodElement) || string.IsNullOrWhiteSpace(methodElement.GetString()) ||
+            !root.TryGetProperty("createdAt", out var createdElement) || !createdElement.TryGetDateTimeOffset(out var createdAt) ||
+            !root.TryGetProperty("tableNumber", out var tableElement) || !tableElement.TryGetInt32(out var tableNumber) ||
+            !root.TryGetProperty("persons", out var personsElement) || !personsElement.TryGetInt32(out var persons) ||
+            !root.TryGetProperty("lines", out var linesElement) || linesElement.ValueKind != JsonValueKind.Array)
+            throw new InvalidOperationException("Das Backend hat unvollständige Zahlungsdetails zurückgegeben.");
+
+        var lines = new List<StripePurchaseLine>();
+        foreach (var line in linesElement.EnumerateArray())
+        {
+            if (!line.TryGetProperty("name", out var nameElement) || string.IsNullOrWhiteSpace(nameElement.GetString()) ||
+                !line.TryGetProperty("quantity", out var quantityElement) || !quantityElement.TryGetInt32(out var quantity) || quantity < 1 ||
+                !line.TryGetProperty("unitPrice", out var priceElement) || !priceElement.TryGetDecimal(out var unitPrice) || unitPrice < 0)
+                throw new InvalidOperationException("Das Backend hat eine ungültige Bestellposition zurückgegeben.");
+            lines.Add(new StripePurchaseLine(nameElement.GetString()!, quantity, unitPrice));
+        }
+
+        return new StripePaymentDetails(sessionId, paid.GetBoolean(), amountValue, currencyElement.GetString()!,
+            methodElement.GetString()!, createdAt.LocalDateTime, tableNumber, persons, lines);
     }
 
     private static Uri GetBaseUri()

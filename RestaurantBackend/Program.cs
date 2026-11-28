@@ -80,7 +80,8 @@ app.MapGet("/payments/{sessionId}/status", async (string sessionId, IHttpClientF
 {
     if (!sessionId.StartsWith("cs_test_", StringComparison.Ordinal))
         return Results.BadRequest(new { error = "Ungültige Test-Checkout-ID." });
-    using var message = new HttpRequestMessage(HttpMethod.Get, $"https://api.stripe.com/v1/checkout/sessions/{Uri.EscapeDataString(sessionId)}");
+    using var message = new HttpRequestMessage(HttpMethod.Get,
+        $"https://api.stripe.com/v1/checkout/sessions/{Uri.EscapeDataString(sessionId)}?expand%5B%5D=payment_intent.payment_method");
     message.Headers.Authorization = new AuthenticationHeaderValue("Bearer", secret);
     using var response = await factory.CreateClient().SendAsync(message, cancellationToken);
     if (!response.IsSuccessStatusCode)
@@ -88,13 +89,66 @@ app.MapGet("/payments/{sessionId}/status", async (string sessionId, IHttpClientF
         logger.LogWarning("Stripe-Statusabfrage wurde mit HTTP {Status} abgelehnt.", (int)response.StatusCode);
         return Results.Problem("Der Zahlungsstatus konnte bei Stripe nicht geprüft werden.", statusCode: 502);
     }
+
     using var json = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(cancellationToken), cancellationToken: cancellationToken);
-    var paid = json.RootElement.TryGetProperty("payment_status", out var status) && status.GetString() == "paid";
-    return Results.Ok(new { paid, status = paid ? "paid" : "unpaid" });
+    var root = json.RootElement;
+    var paid = root.TryGetProperty("payment_status", out var status) && status.GetString() == "paid";
+    if (!root.TryGetProperty("amount_total", out var amountElement) || !amountElement.TryGetInt64(out var amountMinor) ||
+        !root.TryGetProperty("currency", out var currencyElement) || string.IsNullOrWhiteSpace(currencyElement.GetString()) ||
+        !root.TryGetProperty("created", out var createdElement) || !createdElement.TryGetInt64(out var createdUnix) ||
+        !root.TryGetProperty("metadata", out var metadata) ||
+        !metadata.TryGetProperty("persons", out var personsElement) || !int.TryParse(personsElement.GetString(), out var persons) ||
+        !metadata.TryGetProperty("table_number", out var tableElement) || !int.TryParse(tableElement.GetString(), out var tableNumber))
+        return Results.Problem("Die Stripe-Checkout-Sitzung enthält unvollständige Bestelldaten.", statusCode: 502);
+
+    using var lineItemsMessage = new HttpRequestMessage(HttpMethod.Get,
+        $"https://api.stripe.com/v1/checkout/sessions/{Uri.EscapeDataString(sessionId)}/line_items?limit=100");
+    lineItemsMessage.Headers.Authorization = new AuthenticationHeaderValue("Bearer", secret);
+    using var lineItemsResponse = await factory.CreateClient().SendAsync(lineItemsMessage, cancellationToken);
+    if (!lineItemsResponse.IsSuccessStatusCode)
+    {
+        logger.LogWarning("Stripe-Bestellpositionen wurden mit HTTP {Status} abgelehnt.", (int)lineItemsResponse.StatusCode);
+        return Results.Problem("Die Bestellpositionen konnten bei Stripe nicht geladen werden.", statusCode: 502);
+    }
+
+    using var lineItemsJson = await JsonDocument.ParseAsync(await lineItemsResponse.Content.ReadAsStreamAsync(cancellationToken), cancellationToken: cancellationToken);
+    if (!lineItemsJson.RootElement.TryGetProperty("data", out var lineItemsData) || lineItemsData.ValueKind != JsonValueKind.Array)
+        return Results.Problem("Stripe hat keine gültigen Bestellpositionen zurückgegeben.", statusCode: 502);
+    var lines = new List<object>();
+    foreach (var stripeLine in lineItemsData.EnumerateArray())
+    {
+        if (!stripeLine.TryGetProperty("description", out var descriptionElement) || string.IsNullOrWhiteSpace(descriptionElement.GetString()) ||
+            !stripeLine.TryGetProperty("quantity", out var quantityElement) || !quantityElement.TryGetInt32(out var quantity) || quantity is < 1 or > 20 ||
+            !stripeLine.TryGetProperty("price", out var priceElement) ||
+            !priceElement.TryGetProperty("unit_amount", out var unitAmountElement) || !unitAmountElement.TryGetInt64(out var unitAmountMinor))
+            return Results.Problem("Stripe hat eine ungültige Bestellposition zurückgegeben.", statusCode: 502);
+        lines.Add(new { name = descriptionElement.GetString(), quantity, unitPrice = unitAmountMinor / 100m });
+    }
+    if (lines.Count == 0)
+        return Results.Problem("Stripe hat für diese Bestellung keine Positionen gespeichert.", statusCode: 502);
+
+    var paymentMethod = "Noch nicht bezahlt";
+    if (paid && root.TryGetProperty("payment_intent", out var intent) && intent.ValueKind == JsonValueKind.Object &&
+        intent.TryGetProperty("payment_method", out var paymentMethodElement) && paymentMethodElement.ValueKind == JsonValueKind.Object &&
+        paymentMethodElement.TryGetProperty("type", out var typeElement) && !string.IsNullOrWhiteSpace(typeElement.GetString()))
+        paymentMethod = typeElement.GetString()!;
+
+    return Results.Ok(new
+    {
+        paid,
+        status = paid ? "paid" : "unpaid",
+        amount = amountMinor / 100m,
+        currency = currencyElement.GetString()!.ToUpperInvariant(),
+        paymentMethod,
+        createdAt = DateTimeOffset.FromUnixTimeSeconds(createdUnix),
+        tableNumber,
+        persons,
+        lines
+    });
 });
 
-app.MapGet("/payment-return", () => Results.Content("<!doctype html><html lang=de><meta charset=utf-8><title>Zahlung prüfen</title><body><h1>Zurück zur App</h1><p>Kehre zur Restaurant-App zurück und tippe auf „Zahlung prüfen“. Erst die Bestätigung von Stripe zeigt den Zahlungsstatus.</p></body></html>", "text/html; charset=utf-8"));
-app.MapGet("/payment-cancel", () => Results.Content("<!doctype html><html lang=de><meta charset=utf-8><title>Zahlung abgebrochen</title><body><h1>Zahlung abgebrochen</h1><p>Du kannst zur App zurückkehren. Es wurde keine Zahlung bestätigt.</p></body></html>", "text/html; charset=utf-8"));
+app.MapGet("/payment-return", () => Results.Content("<!doctype html><html lang=de><meta charset=utf-8><meta name=viewport content=\"width=device-width, initial-scale=1\"><title>Zurück zur App</title><body><h1>Zurück zur App</h1><p>Die App prüft den Zahlungsstatus bei Stripe.</p><p><a href=\"rogerrestaurant://stripe-return?result=success\">App öffnen</a></p><p>Falls die App nicht automatisch öffnet, tippe auf den Link oder kehre zur App zurück und wähle „Zahlung prüfen“.</p><script>window.location.replace('rogerrestaurant://stripe-return?result=success');</script></body></html>", "text/html; charset=utf-8"));
+app.MapGet("/payment-cancel", () => Results.Content("<!doctype html><html lang=de><meta charset=utf-8><meta name=viewport content=\"width=device-width, initial-scale=1\"><title>Zahlung abgebrochen</title><body><h1>Zahlung abgebrochen</h1><p><a href=\"rogerrestaurant://stripe-return?result=cancel\">Zurück zur App</a></p><p>Falls die App nicht automatisch öffnet, kehre zur App zurück und prüfe den Zahlungsstatus.</p><script>window.location.replace('rogerrestaurant://stripe-return?result=cancel');</script></body></html>", "text/html; charset=utf-8"));
 
 app.Run();
 
